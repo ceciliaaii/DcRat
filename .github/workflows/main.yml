@@ -37,6 +37,16 @@ jobs:
     - name: Install NuGet Packages
       run: nuget restore DcRat.sln
 
+    - name: 🔧 Retarget all projects to .NET Framework 4.8
+      shell: pwsh
+      run: |
+        Write-Host "Retargeting all .csproj files to .NET Framework 4.8..."
+        Get-ChildItem -Recurse -Filter *.csproj | ForEach-Object {
+          (Get-Content $_.FullName) -replace '<TargetFrameworkVersion>v4\.[0-9]+</TargetFrameworkVersion>', '<TargetFrameworkVersion>v4.8</TargetFrameworkVersion>' | Set-Content $_.FullName
+        }
+        Write-Host "Retargeting complete."
+
+
     # Build solution
     - name: Build solution
       run: msbuild -nologo -v:m -p:Configuration=${{ matrix.configuration }} DcRat.sln
