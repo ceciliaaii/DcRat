@@ -75,7 +75,7 @@ jobs:
         name: DcRat-Build
         path: D:\a\DcRat\DcRat\Binaries\Release\
 
-    - name: 🗜️ Optional: Zip Binaries folder
+    - name: zip self
       if: always()
       shell: pwsh
       run: |
