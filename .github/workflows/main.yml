@@ -54,8 +54,8 @@ jobs:
 
             $outputDll = Join-Path $outputDir "$($plugin.Name).dll"
             Write-Host "Merging $($plugin.Name) with dependencies..."
-            
-            # 捕获 exit code，避免 Workflow 失败
+
+            # 捕获 ILMerge exit code，避免 Workflow 失败
             try {
                 & $ilmerge `
                   /targetplatform:v4,"C:\Windows\Microsoft.NET\Framework\v4.0.30319" `
@@ -65,7 +65,7 @@ jobs:
                   $dllPath `
                   $dependencyDlls
             } catch {
-                Write-Warning "ILMerge returned non-zero exit code, ignored."
+                Write-Warning "ILMerge returned non-zero exit code for $($plugin.Name), ignored."
             }
         }
 
@@ -74,3 +74,13 @@ jobs:
       with:
         name: DcRat-Build
         path: D:\a\DcRat\DcRat\Binaries\Release\
+
+    - name: 🗜️ Optional: Zip Binaries folder
+      if: always()
+      shell: pwsh
+      run: |
+        $zipPath = "D:\a\DcRat\DcRat\Binaries\Release\DcRat-Build.zip"
+        if (Test-Path $zipPath) { Remove-Item $zipPath }
+        Compress-Archive -Path "D:\a\DcRat\DcRat\Binaries\Release\*" -DestinationPath $zipPath
+        Write-Host "ZIP package created at $zipPath"
+      continue-on-error: true
