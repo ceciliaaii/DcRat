@@ -1,4 +1,4 @@
-name: Build DcRat Release
+name: Build DcRat
 
 on:
   push:
@@ -12,7 +12,7 @@ jobs:
       matrix:
         configuration: [Release]
 
-    runs-on: windows-2022
+    runs-on: windows-latest
 
     steps:
     - name: Checkout
@@ -23,77 +23,59 @@ jobs:
     # Install the .NET Core workload
     - name: Install .NET Core
       uses: actions/setup-dotnet@v1
-
-    - name: Install dotnet 4.x
-      shell: pwsh
-      run: |
-        $packs = @(
-          "https://download.visualstudio.microsoft.com/download/pr/97d88cb8-3f58-4954-91b1-3b78fbe58cb4/2E45A3B30D9D9FBE7C26E62B9C14CF9F54E91C6C/netfx-4.6.1-devpack.exe",
-          "https://download.visualstudio.microsoft.com/download/pr/91f04af2-5071-44c0-8f77-6ad6b3f8c444/18B4736AEE82B244D0D61EAF949CC3A5F58E845B/netfx-4.7.2-devpack.exe",
-          "https://download.visualstudio.microsoft.com/download/pr/027f0c4e-0c48-4da4-a6e9-5f7eaf1a3c42/E2A33B9F21A61A58BA29A9CDE1473E8E6C49C98C/netfx-4.8-devpack.exe"
-        )
-        foreach ($url in $packs) {
-            $file = Split-Path $url -Leaf
-            Write-Host "Downloading $file..."
-            Invoke-WebRequest -Uri $url -OutFile $file
-            Write-Host "Installing $file..."
-            Start-Process -FilePath $file -ArgumentList "/quiet", "/norestart" -Wait
-        }
-
-    
       
-        # Install 7Zip PowerShell Module
-        - name: Install 7Zip PowerShell Module
-          shell: powershell
-          run: Install-Module 7Zip4PowerShell -Force -Verbose
-  
-        # Add MSBuild to the PATH
-        - name: Setup MSBuild
-          uses: microsoft/setup-msbuild@v1.0.2
-    
-        # Install NuGet packages
-        - name: Install NuGet Packages
-          run: nuget restore DcRat.sln
-    
-        # Build solution
-        - name: Build solution
-          run: msbuild -nologo -v:m -p:Configuration=${{ matrix.configuration }} DcRat.sln
-            
-        # Build Artifact
-        - name: Build Artifact
-          shell: cmd
-          run: call .\ArtifactBuild.cmd
-          
-        # Delete-tag-and-release
-        - name: Delete-tag-and-release
-          uses: dev-drprasad/delete-tag-and-release@v0.2.1
-          with:
-            delete_release: true # default: false
-            tag_name: AutoBuild # tag name to delete
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    # Install 7Zip PowerShell Module
+    - name: Install 7Zip PowerShell Module
+      shell: powershell
+      run: Install-Module 7Zip4PowerShell -Force -Verbose
+
+    # Add MSBuild to the PATH
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.0.2
+
+    # Install NuGet packages
+    - name: Install NuGet Packages
+      run: nuget restore DcRat.sln
+
+    # Build solution
+    - name: Build solution
+      run: msbuild -nologo -v:m -p:Configuration=${{ matrix.configuration }} DcRat.sln
         
-        # Create Release
-        - name: Create Release
-          id: create_release
-          uses: actions/create-release@latest
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          with:
-            tag_name: AutoBuild
-            release_name: AutoBuild
-            body: ${{ steps.changelog.outputs.changelog }}
-            draft: false
-            prerelease: true
-            
-        # Upload Release Asset
-        - name: Upload Release Asset
-          id: upload-release-asset 
-          uses: actions/upload-release-asset@v1
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          with:
-            upload_url: ${{ steps.create_release.outputs.upload_url }}
-            asset_path: ./DcRat.zip
-            asset_name: DcRat.zip
-            asset_content_type: application/zip
+    # Build Artifact
+    - name: Build Artifact
+      shell: cmd
+      run: call .\ArtifactBuild.cmd
+      
+    # Delete-tag-and-release
+    - name: Delete-tag-and-release
+      uses: dev-drprasad/delete-tag-and-release@v0.2.1
+      with:
+        delete_release: true # default: false
+        tag_name: AutoBuild # tag name to delete
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    # Create Release
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@latest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: AutoBuild
+        release_name: AutoBuild
+        body: ${{ steps.changelog.outputs.changelog }}
+        draft: false
+        prerelease: true
+        
+    # Upload Release Asset
+    - name: Upload Release Asset
+      id: upload-release-asset 
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./DcRat.zip
+        asset_name: DcRat.zip
+        asset_content_type: application/zip
