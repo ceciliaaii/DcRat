@@ -23,6 +23,11 @@ jobs:
     # Install the .NET Core workload
     - name: Install .NET Core
       uses: actions/setup-dotnet@v1
+
+    - name: Install .NET Framework 4.7.2 Developer Pack
+      run: |
+        Invoke-WebRequest -Uri "https://download.visualstudio.microsoft.com/download/pr/7b3e8dc1-8159-4e05-b70b-9274dc92a3e3/2B665D3E955AEAB741F62E845C5102F0708F87BF71AC95F482CFC76A3C0C8A39/ndp472-devpack-enu.exe" -OutFile "ndp472-devpack-enu.exe"
+        Start-Process .\ndp472-devpack-enu.exe -ArgumentList "/quiet", "/norestart" -Wait
       
     # Install 7Zip PowerShell Module
     - name: Install 7Zip PowerShell Module
