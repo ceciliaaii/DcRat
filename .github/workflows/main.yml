@@ -24,29 +24,21 @@ jobs:
     - name: Install .NET Core
       uses: actions/setup-dotnet@v1
 
- # 安装 .NET Framework 4.0 Developer Pack
-    - name: Install .NET Framework 4.0 Developer Pack
-      shell: pwsh
-      run: |
-        $url = "https://go.microsoft.com/fwlink/?LinkId=164193"
-        $output = "dotNetFx40_Full_x86_x64.exe"
-        Write-Host "Downloading .NET Framework 4.0 SDK..."
-        Invoke-WebRequest -Uri $url -OutFile $output -UseBasicParsing
-        Write-Host "Installing..."
-        Start-Process .\$output -ArgumentList "/q", "/norestart" -Wait
-        Write-Host ".NET Framework 4.0 Developer Pack installed."
-
-    # 安装 .NET Framework 4.6.1 Developer Pack（使用直链）
-    - name: Install .NET Framework 4.6.1 Developer Pack
-      shell: pwsh
-      run: |
-        $url = "https://download.visualstudio.microsoft.com/download/pr/9c3b6a6f-2731-4ec8-9501-11f730b5b0e8/1C9BFCC7390EAA7B733A7C8E54285CB0B9AEAB52F72C7F4385B520D4DE6E749E/NDP461-DevPack-KB3105179-ENU.exe"
-        $output = "NDP461-DevPack.exe"
-        Write-Host "Downloading .NET Framework 4.6.1 Developer Pack..."
-        Invoke-WebRequest -Uri $url -OutFile $output -UseBasicParsing
-        Write-Host "Installing..."
-        Start-Process .\$output -ArgumentList "/quiet", "/norestart" -Wait
-        Write-Host ".NET Framework 4.6.1 Developer Pack installed."
+- name: Install .NET Framework targeting packs
+  shell: pwsh
+  run: |
+    $packs = @(
+      "https://download.visualstudio.microsoft.com/download/pr/97d88cb8-3f58-4954-91b1-3b78fbe58cb4/2E45A3B30D9D9FBE7C26E62B9C14CF9F54E91C6C/netfx-4.6.1-devpack.exe",
+      "https://download.visualstudio.microsoft.com/download/pr/91f04af2-5071-44c0-8f77-6ad6b3f8c444/18B4736AEE82B244D0D61EAF949CC3A5F58E845B/netfx-4.7.2-devpack.exe",
+      "https://download.visualstudio.microsoft.com/download/pr/027f0c4e-0c48-4da4-a6e9-5f7eaf1a3c42/E2A33B9F21A61A58BA29A9CDE1473E8E6C49C98C/netfx-4.8-devpack.exe"
+    )
+    foreach ($url in $packs) {
+        $file = Split-Path $url -Leaf
+        Write-Host "Downloading $file..."
+        Invoke-WebRequest -Uri $url -OutFile $file
+        Write-Host "Installing $file..."
+        Start-Process -FilePath $file -ArgumentList "/quiet", "/norestart" -Wait
+    }
 
     
       
