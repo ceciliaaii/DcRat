@@ -8,79 +8,74 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        configuration: [Release]
+
+    runs-on: windows-2019
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@main
+      with:
+        fetch-depth: 0
 
+    # Install the .NET Core workload
+    - name: Install .NET Core
+      uses: actions/setup-dotnet@v1
+      
+    # Install 7Zip PowerShell Module
+    - name: Install 7Zip PowerShell Module
+      shell: powershell
+      run: Install-Module 7Zip4PowerShell -Force -Verbose
+
+    # Add MSBuild to the PATH
     - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
+      uses: microsoft/setup-msbuild@v1.0.2
 
-    - name: Setup NuGet
-      uses: NuGet/setup-nuget@v2
-
-    - name: Restore NuGet packages
+    # Install NuGet packages
+    - name: Install NuGet Packages
       run: nuget restore DcRat.sln
 
-    - name: 🔧 Retarget all projects to .NET Framework 4.8
-      shell: pwsh
-      run: |
-        Write-Host "Retargeting all .csproj files to .NET Framework 4.8..."
-        Get-ChildItem -Recurse -Filter *.csproj | ForEach-Object {
-          (Get-Content $_.FullName) -replace '<TargetFrameworkVersion>v4\.[0-9]+</TargetFrameworkVersion>', '<TargetFrameworkVersion>v4.8</TargetFrameworkVersion>' | Set-Content $_.FullName
-        }
-        Write-Host "Retargeting complete."
-
-    - name: 🧱 Build solution
-      run: msbuild -nologo -v:m -p:Configuration=Release DcRat.sln
-
-    - name: ⚡ Merge plugin DLLs safely with ILMerge
-      shell: pwsh
-      run: |
-        $ilmerge = "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\ILMerge.exe"
-        $outputDir = "D:\a\DcRat\DcRat\Binaries\Release\Plugins"
-        if (!(Test-Path $outputDir)) { New-Item -ItemType Directory -Path $outputDir }
-
-        $plugins = Get-ChildItem -Path "DcRat\DcRat\Plugin" -Directory
-        foreach ($plugin in $plugins) {
-            $dllPath = Join-Path $plugin.FullName "obj\Release\$($plugin.Name).dll"
-            if (!(Test-Path $dllPath)) { Write-Warning "$($plugin.Name) DLL not found, skipping"; continue }
-
-            # 收集依赖 DLL（MessagePackLib + 插件目录下的其他 DLL）
-            $dependencyDlls = @("D:\a\DcRat\DcRat\MessagePack\bin\Release\MessagePackLib.dll")
-            $pluginReleaseDlls = Get-ChildItem -Path $plugin.FullName -Recurse -Filter *.dll | Where-Object { $_.FullName -ne $dllPath }
-            foreach ($dep in $pluginReleaseDlls) { $dependencyDlls += $dep.FullName }
-
-            $outputDll = Join-Path $outputDir "$($plugin.Name).dll"
-            Write-Host "Merging $($plugin.Name) with dependencies..."
-
-            # 捕获 ILMerge exit code，避免 Workflow 失败
-            try {
-                & $ilmerge `
-                  /targetplatform:v4,"C:\Windows\Microsoft.NET\Framework\v4.0.30319" `
-                  /allowDup `
-                  /closed `
-                  /out:$outputDll `
-                  $dllPath `
-                  $dependencyDlls
-            } catch {
-                Write-Warning "ILMerge returned non-zero exit code for $($plugin.Name), ignored."
-            }
-        }
-
-    - name: 📦 Upload build artifacts
-      uses: actions/upload-artifact@v4
+    # Build solution
+    - name: Build solution
+      run: msbuild -nologo -v:m -p:Configuration=${{ matrix.configuration }} DcRat.sln
+        
+    # Build Artifact
+    - name: Build Artifact
+      shell: cmd
+      run: call .\ArtifactBuild.cmd
+      
+    # Delete-tag-and-release
+    - name: Delete-tag-and-release
+      uses: dev-drprasad/delete-tag-and-release@v0.2.0
       with:
-        name: DcRat-Build
-        path: D:\a\DcRat\DcRat\Binaries\Release\
-
-    - name: zip self
-      if: always()
-      shell: pwsh
-      run: |
-        $zipPath = "D:\a\DcRat\DcRat\Binaries\Release\DcRat-Build.zip"
-        if (Test-Path $zipPath) { Remove-Item $zipPath }
-        Compress-Archive -Path "D:\a\DcRat\DcRat\Binaries\Release\*" -DestinationPath $zipPath
-        Write-Host "ZIP package created at $zipPath"
-      continue-on-error: true
+        delete_release: true # default: false
+        tag_name: AutoBuild # tag name to delete
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    # Create Release
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@latest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: AutoBuild
+        release_name: AutoBuild
+        body: ${{ steps.changelog.outputs.changelog }}
+        draft: false
+        prerelease: true
+        
+    # Upload Release Asset
+    - name: Upload Release Asset
+      id: upload-release-asset 
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./DcRat.zip
+        asset_name: DcRat.zip
+        asset_content_type: application/zip
