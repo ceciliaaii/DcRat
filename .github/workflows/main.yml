@@ -12,7 +12,7 @@ jobs:
       matrix:
         configuration: [Release]
 
-    runs-on: windows-lasted
+    runs-on: windows-2022
 
     steps:
     - name: Checkout
